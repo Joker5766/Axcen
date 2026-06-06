@@ -1,0 +1,101 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String          @id @default(uuid())
+  email        String          @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  memberships  ProjectMember[]
+  nodesCreated Node[]
+  activities   Activity[]
+}
+
+model Project {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  members     ProjectMember[]
+  branches    Branch[]
+  activities  Activity[]
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String   @default("MEMBER") // "OWNER" | "MEMBER"
+  invitedAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model Branch {
+  id             String   @id @default(uuid())
+  name           String
+  projectId      String
+  parentBranchId String?
+  createdAt      DateTime @default(now())
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentBranch   Branch?  @relation("BranchHierarchy", fields: [parentBranchId], references: [id], onDelete: SetNull)
+  childBranches  Branch[] @relation("BranchHierarchy")
+  nodes          Node[]
+
+  @@unique([projectId, name])
+}
+
+model Node {
+  id             String             @id @default(uuid())
+  title          String
+  status         String             @default("NOT_STARTED") // "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"
+  branchId       String
+  authorId       String
+  summary        String
+  notes          String?
+  nextSteps      String?
+  relatedCommits String             @default("[]") // JSON stringified array of commit hashes
+  completedWork  String             @default("[]") // JSON stringified array of completed tasks
+  pendingWork    String             @default("[]") // JSON stringified array of pending tasks
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  branch         Branch             @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  author         User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  incoming       NodeRelationship[] @relation("NodeTo")
+  outgoing       NodeRelationship[] @relation("NodeFrom")
+}
+
+model NodeRelationship {
+  id         String @id @default(uuid())
+  fromNodeId String
+  toNodeId   String
+  fromNode   Node   @relation("NodeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode     Node   @relation("NodeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([fromNodeId, toNodeId])
+}
+
+model Activity {
+  id         String   @id @default(uuid())
+  projectId  String
+  userId     String
+  action     String // e.g. "created", "updated", "completed", "invited"
+  entityType String // e.g. "node", "branch", "project", "member"
+  entityName String // e.g. "Login UI", "feature/auth"
+  createdAt  DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
