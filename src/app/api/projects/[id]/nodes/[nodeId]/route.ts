@@ -48,6 +48,25 @@ export async function PUT(
     }
 
     const updatedNode = await prisma.$transaction(async (tx) => {
+      let commitsToSet: { id: string }[] | undefined = undefined;
+      if (relatedCommits !== undefined && Array.isArray(relatedCommits)) {
+        const githubRepository = await tx.gitHubRepository.findUnique({
+          where: { projectId },
+        });
+        if (githubRepository) {
+          const dbCommits = await tx.gitHubCommit.findMany({
+            where: {
+              repoId: githubRepository.id,
+              sha: { in: relatedCommits },
+            },
+            select: { id: true },
+          });
+          commitsToSet = dbCommits.map((c) => ({ id: c.id }));
+        } else {
+          commitsToSet = [];
+        }
+      }
+
       // 1. Update node fields with serialization
       const nd = await tx.node.update({
         where: { id: nodeId },
@@ -61,6 +80,9 @@ export async function PUT(
           relatedCommits: relatedCommits !== undefined ? JSON.stringify(relatedCommits) : undefined,
           completedWork: completedWork !== undefined ? JSON.stringify(completedWork) : undefined,
           pendingWork: pendingWork !== undefined ? JSON.stringify(pendingWork) : undefined,
+          githubCommits: commitsToSet !== undefined ? {
+            set: commitsToSet,
+          } : undefined,
         },
       });
 
@@ -118,6 +140,7 @@ export async function PUT(
             avatarUrl: true,
           },
         },
+        githubCommits: true,
       },
     });
 

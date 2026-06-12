@@ -11,17 +11,37 @@ import {
   Search, 
   UserPlus, 
   Plus, 
-  AlertCircle
+  AlertCircle,
+  Settings,
+  Check
 } from 'lucide-react';
 import Link from 'next/link';
 
+const Github = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 24 24"
+    width="24"
+    height="24"
+    stroke="currentColor"
+    strokeWidth="2"
+    fill="none"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+  </svg>
+);
+
 // Shared Types
-import { User, ProjectMember, Branch, Node, Relationship, Activity } from '@/types';
+import { User, ProjectMember, Branch, Node, Relationship, Activity, GitHubCommit, GitHubRepository, Project } from '@/types';
 
 // Components
 import BranchGraph from '@/components/BranchGraph';
 import BranchDetailGraph from '@/components/BranchDetailGraph';
 import NodeDetailsPanel from '@/components/NodeDetailsPanel';
+import UserSettingsModal from '@/components/UserSettingsModal';
+import ProjectSettingsModal from '@/components/ProjectSettingsModal';
 
 export default function ProjectWorkspacePage({
   params,
@@ -35,7 +55,7 @@ export default function ProjectWorkspacePage({
   const [projectId, setProjectId] = useState<string | null>(null);
 
   // Core Project Workspace State
-  const [project, setProject] = useState<any | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -51,9 +71,9 @@ export default function ProjectWorkspacePage({
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{
-    nodes: any[];
-    branches: any[];
-    members: any[];
+    nodes: Node[];
+    branches: Branch[];
+    members: ProjectMember[];
   } | null>(null);
   const [searching, setSearching] = useState(false);
 
@@ -87,9 +107,45 @@ export default function ProjectWorkspacePage({
   const [nodeError, setNodeError] = useState('');
   const [nodeSubmitting, setNodeSubmitting] = useState(false);
 
+  // Settings modals states
+  const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
+  const [showProjectSettingsModal, setShowProjectSettingsModal] = useState(false);
+
+  // Commits selector states
+  const [selectedCommits, setSelectedCommits] = useState<string[]>([]);
+  const [commitSearchQuery, setCommitSearchQuery] = useState('');
+  const [searchedCommits, setSearchedCommits] = useState<GitHubCommit[]>([]);
+  const [commitsLoading, setCommitsLoading] = useState(false);
+  const [manualCommitHash, setManualCommitHash] = useState('');
+
   // New task temp input fields
   const [tempCompTask, setTempCompTask] = useState('');
   const [tempPendTask, setTempPendTask] = useState('');
+
+  // Search commits from database
+  useEffect(() => {
+    const searchCommits = async () => {
+      if (!projectId || !project?.githubRepository) return;
+      setCommitsLoading(true);
+      try {
+        const res = await fetch(`/api/projects/${projectId}/github/commits?q=${encodeURIComponent(commitSearchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchedCommits(data.commits || []);
+        }
+      } catch (err) {
+        console.error('Failed to search commits:', err);
+      } finally {
+        setCommitsLoading(false);
+      }
+    };
+
+    const delayDebounceFn = setTimeout(() => {
+      searchCommits();
+    }, 250);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [commitSearchQuery, projectId, project?.githubRepository]);
 
   // Unwrap params
   useEffect(() => {
@@ -118,7 +174,7 @@ export default function ProjectWorkspacePage({
 
         // Save active branch selection (default to main, then first branch, or null)
         if (!activeBranchId && data.project.branches && data.project.branches.length > 0) {
-          const mainBranch = data.project.branches.find((b: any) => b.name === 'main');
+          const mainBranch = data.project.branches.find((b: Branch) => b.name === 'main');
           setActiveBranchId(mainBranch ? mainBranch.id : data.project.branches[0].id);
         }
 
@@ -252,6 +308,9 @@ export default function ProjectWorkspacePage({
     setNodeNotes('');
     setNodeNextSteps('');
     setNodeCommitsInput('');
+    setSelectedCommits([]);
+    setCommitSearchQuery('');
+    setManualCommitHash('');
     setNodeCompletedTasks([]);
     setNodePendingTasks([]);
     setNodeParentLinks([]);
@@ -268,6 +327,9 @@ export default function ProjectWorkspacePage({
     setNodeNotes(node.notes || '');
     setNodeNextSteps(node.nextSteps || '');
     setNodeCommitsInput(node.relatedCommits.join(', '));
+    setSelectedCommits(node.relatedCommits);
+    setCommitSearchQuery('');
+    setManualCommitHash('');
     setNodeCompletedTasks(node.completedWork);
     setNodePendingTasks(node.pendingWork);
     
@@ -290,10 +352,12 @@ export default function ProjectWorkspacePage({
       return;
     }
 
-    const commits = nodeCommitsInput
-      .split(',')
-      .map((c) => c.trim())
-      .filter((c) => c.length > 0);
+    const commits = project?.githubRepository
+      ? selectedCommits
+      : nodeCommitsInput
+          .split(',')
+          .map((c) => c.trim())
+          .filter((c) => c.length > 0);
 
     setNodeSubmitting(true);
     
@@ -514,6 +578,24 @@ export default function ProjectWorkspacePage({
               </div>
             )}
           </div>
+
+          <button
+            onClick={() => setShowProjectSettingsModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            title="Project Integration Settings"
+          >
+            <Settings className="h-4 w-4" />
+            <span className="hidden sm:inline">Project Settings</span>
+          </button>
+
+          <button
+            onClick={() => setShowUserSettingsModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            title="User Profile Settings"
+          >
+            <Settings className="h-4 w-4" />
+            <span className="hidden sm:inline">User Settings</span>
+          </button>
 
           <button
             onClick={() => setShowInviteModal(true)}
@@ -849,19 +931,134 @@ export default function ProjectWorkspacePage({
                 </select>
               </div>
 
-              {/* Related Commits */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Related Commits (comma separated hashes, optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 5d8fa23, b8a34d2"
-                  value={nodeCommitsInput}
-                  onChange={(e) => setNodeCommitsInput(e.target.value)}
-                  className="block w-full rounded-lg border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-slate-800 focus:outline-none transition-colors font-mono"
-                />
-              </div>
+              {/* Related Commits Selector */}
+              {project?.githubRepository ? (
+                <div className="space-y-3 p-3.5 border border-slate-200 rounded-xl bg-slate-50/50">
+                  <div className="flex items-center gap-1.5 text-slate-800">
+                    <Github className="h-4 w-4 text-slate-700" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">GitHub Commits Selector</span>
+                  </div>
+
+                  {/* Selected Commits Badges */}
+                  {selectedCommits.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Attached Commits</span>
+                      <div className="flex flex-wrap gap-1.5 p-2 border border-slate-100 rounded-lg bg-white">
+                        {selectedCommits.map((sha) => (
+                          <div key={sha} className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-mono font-semibold text-slate-600">
+                            <span>{sha.slice(0, 7)}</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCommits(selectedCommits.filter((s) => s !== sha))}
+                              className="text-red-400 hover:text-red-600 font-bold ml-1 text-xs cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search Commits Input */}
+                  <div className="space-y-1.5 relative">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Search and Attach Commits</label>
+                    <input
+                      type="text"
+                      placeholder="Search synced commits by message, author, or SHA..."
+                      value={commitSearchQuery}
+                      onChange={(e) => setCommitSearchQuery(e.target.value)}
+                      className="block w-full rounded-lg border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-slate-800 focus:outline-none bg-white transition-colors"
+                    />
+                    {commitSearchQuery.trim() !== '' && (
+                      <div className="absolute left-0 right-0 mt-1.5 z-30 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg p-2 space-y-1">
+                        {commitsLoading ? (
+                          <p className="text-[10px] text-slate-400 italic p-2 text-center">Searching commits...</p>
+                        ) : searchedCommits.length === 0 ? (
+                          <p className="text-[10px] text-slate-400 italic p-2 text-center">No commits found.</p>
+                        ) : (
+                          searchedCommits.map((commit) => {
+                            const isSelected = selectedCommits.includes(commit.sha);
+                            return (
+                              <button
+                                key={commit.sha}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedCommits(selectedCommits.filter((s) => s !== commit.sha));
+                                  } else {
+                                    setSelectedCommits([...selectedCommits, commit.sha]);
+                                  }
+                                  setCommitSearchQuery('');
+                                }}
+                                className="w-full text-left p-1.5 rounded-md hover:bg-slate-50 flex items-center justify-between text-[11px] font-medium"
+                              >
+                                <div className="truncate pr-2">
+                                  <span className="font-mono font-bold text-slate-700 bg-slate-100 rounded px-1 py-0.5 text-[10px] mr-1.5">{commit.sha.slice(0, 7)}</span>
+                                  <span className="text-slate-800 font-semibold">{commit.message}</span>
+                                  <span className="text-[9.5px] text-slate-400 font-medium block mt-0.5">by {commit.author} • {new Date(commit.timestamp).toLocaleDateString()}</span>
+                                </div>
+                                {isSelected && <Check className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual Commit Input */}
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1 space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Or attach by commit hash manually
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. f23a9b1"
+                        value={manualCommitHash}
+                        onChange={(e) => setManualCommitHash(e.target.value)}
+                        className="block w-full rounded-lg border border-slate-200 py-1.5 px-3 text-xs text-slate-900 focus:border-slate-800 focus:outline-none bg-white transition-colors font-mono"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const hash = manualCommitHash.trim();
+                        if (hash && !selectedCommits.includes(hash)) {
+                          setSelectedCommits([...selectedCommits, hash]);
+                          setManualCommitHash('');
+                        }
+                      }}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer h-[34px]"
+                    >
+                      Attach
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 p-3.5 border border-slate-200 rounded-xl bg-slate-50/50">
+                  <div className="flex items-center gap-1.5 text-slate-500">
+                    <Github className="h-4 w-4" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">GitHub integration not active</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-normal font-semibold">
+                    Link a repository in Project Settings to search and select synced commits.
+                  </p>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Related Commits (comma separated hashes, optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 5d8fa23, b8a34d2"
+                      value={nodeCommitsInput}
+                      onChange={(e) => setNodeCommitsInput(e.target.value)}
+                      className="block w-full rounded-lg border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-slate-800 focus:outline-none bg-white transition-colors font-mono"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Summary */}
               <div className="space-y-1.5">
@@ -1050,6 +1247,18 @@ export default function ProjectWorkspacePage({
         </div>
       )}
 
+      {/* Settings Modals */}
+      {showUserSettingsModal && (
+        <UserSettingsModal onClose={() => setShowUserSettingsModal(false)} />
+      )}
+      {showProjectSettingsModal && (
+        <ProjectSettingsModal
+          projectId={projectId || ''}
+          githubRepository={project?.githubRepository || null}
+          onClose={() => setShowProjectSettingsModal(false)}
+          onRepositoryUpdated={() => projectId && fetchWorkspace(projectId)}
+        />
+      )}
     </div>
   );
 }

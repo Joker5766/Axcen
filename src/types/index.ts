@@ -22,6 +22,7 @@ export interface Branch {
   name: string;
   projectId: string;
   parentBranchId: string | null;
+  githubSyncedFrom?: boolean;
   createdAt: string;
 }
 
@@ -40,6 +41,7 @@ export interface Node {
   createdAt: string;
   updatedAt: string;
   author: User;
+  githubCommits?: GitHubCommit[];
 }
 
 export interface Relationship {
@@ -58,3 +60,58 @@ export interface Activity {
   createdAt: string;
   user: User;
 }
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+  members: ProjectMember[];
+  branches: Branch[];
+  activities?: Activity[];
+  githubRepository?: GitHubRepository | null;
+}
+
+// ─── GitHub Integration Types ────────────────────────────────────────────────
+
+export interface GitHubAccount {
+  id: string;
+  githubId: number;
+  githubUsername: string;
+  avatarUrl: string | null;
+}
+
+export interface GitHubRepository {
+  id: string;
+  projectId: string;
+  repoName: string;
+  repoOwner: string;
+  repoUrl: string;
+  defaultBranch: string;
+  lastBranchSync: string | null;
+  lastCommitSync: string | null;
+}
+
+export interface GitHubCommit {
+  id: string;
+  sha: string;
+  message: string;
+  author: string;
+  timestamp: string;
+  branchName: string;
+}
+
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  owner: { login: string; avatar_url: string };
+  html_url: string;
+  description: string | null;
+  default_branch: string;
+  private: boolean;
+  updated_at: string;
+}
+

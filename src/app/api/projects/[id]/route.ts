@@ -62,6 +62,7 @@ export async function GET(
           },
           take: 50, // limit to last 50 activities for performance
         },
+        githubRepository: true,
       },
     });
 
@@ -84,6 +85,7 @@ export async function GET(
             avatarUrl: true,
           },
         },
+        githubCommits: true,
       },
       orderBy: {
         createdAt: 'asc',

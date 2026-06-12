@@ -255,10 +255,10 @@ export async function GET() {
         { email: 'alex@company.com', password: 'password123', name: 'Alex Mercer (Member/Dev)' }
       ]
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Seeding error:', error);
     return NextResponse.json(
-      { error: 'Failed to seed database: ' + error.message },
+      { error: 'Failed to seed database: ' + (error instanceof Error ? error.message : String(error)) },
       { status: 500 }
     );
   }

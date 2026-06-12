@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         avatarUrl: user.avatarUrl,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
       { error: 'Something went wrong. Please try again.' },

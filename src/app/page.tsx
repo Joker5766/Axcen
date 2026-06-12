@@ -13,9 +13,11 @@ import {
   LogOut,
   FolderOpen,
   Activity as ActivityIcon,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react';
 import Link from 'next/link';
+import UserSettingsModal from '@/components/UserSettingsModal';
 
 interface Project {
   id: string;
@@ -75,6 +77,9 @@ export default function DashboardPage() {
   // Search filter
   const [searchQuery, setSearchQuery] = useState('');
 
+  // User Settings Modal State
+  const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
+
   // Protect route
   useEffect(() => {
     if (!loading && !user) {
@@ -91,13 +96,13 @@ export default function DashboardPage() {
 
         // Aggregate activities from all projects
         const allActivities: Activity[] = [];
-        data.projects?.forEach((proj: any) => {
+        data.projects?.forEach((proj: { name: string; activities?: Omit<Activity, 'project'>[] }) => {
           if (proj.activities) {
-            proj.activities.forEach((act: any) => {
+            proj.activities.forEach((act: Omit<Activity, 'project'>) => {
               allActivities.push({
                 ...act,
                 project: { name: proj.name }
-              });
+              } as Activity);
             });
           }
         });
@@ -224,6 +229,14 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-400 mt-0.5">{user.email}</p>
               </div>
             </div>
+
+            <button 
+              onClick={() => setShowUserSettingsModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-50 text-sm font-semibold transition-colors cursor-pointer"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
 
             <button 
               onClick={() => logout()}
@@ -467,6 +480,10 @@ export default function DashboardPage() {
             </form>
           </div>
         </div>
+      )}
+      {/* User Settings Modal */}
+      {showUserSettingsModal && (
+        <UserSettingsModal onClose={() => setShowUserSettingsModal(false)} />
       )}
     </div>
   );

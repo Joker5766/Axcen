@@ -223,24 +223,54 @@ export default function NodeDetailsPanel({
 
         {/* Associated Commits */}
         {node.relatedCommits.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Related Commits</span>
-            <div className="flex flex-wrap gap-2">
-              {node.relatedCommits.map((hash) => (
-                <button
-                  key={hash}
-                  onClick={() => handleCopyCommit(hash)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-[10px] font-mono font-semibold text-slate-600 transition-all cursor-pointer"
-                  title="Click to copy commit hash"
-                >
-                  {copiedCommit === hash ? (
-                    <Check className="h-3 w-3 text-green-600 animate-in zoom-in-50" />
-                  ) : (
-                    <Copy className="h-3 w-3 text-slate-400" />
-                  )}
-                  <span>{hash.slice(0, 7)}</span>
-                </button>
-              ))}
+            <div className="space-y-2 border border-slate-100 rounded-xl bg-slate-50/20 p-3">
+              {node.relatedCommits.map((hash) => {
+                const commitInfo = node.githubCommits?.find(
+                  (c) => c.sha === hash || c.sha.startsWith(hash)
+                );
+
+                return (
+                  <div key={hash} className="flex flex-col gap-1.5 p-2.5 border border-slate-100 bg-white rounded-lg shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => handleCopyCommit(hash)}
+                        className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-[9.5px] font-mono font-semibold text-slate-600 transition-all cursor-pointer"
+                        title="Click to copy commit hash"
+                      >
+                        {copiedCommit === hash ? (
+                          <Check className="h-3 w-3 text-green-600 animate-in zoom-in-50" />
+                        ) : (
+                          <Copy className="h-3 w-3 text-slate-400" />
+                        )}
+                        <span>{hash.slice(0, 7)}</span>
+                      </button>
+                      
+                      {commitInfo && (
+                        <span className="text-[9.5px] text-slate-400 font-semibold">
+                          {new Date(commitInfo.timestamp).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      )}
+                    </div>
+
+                    {commitInfo ? (
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-semibold text-slate-800 leading-normal">{commitInfo.message}</p>
+                        <p className="text-[9.5px] text-slate-400 font-semibold">by {commitInfo.author}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-semibold text-slate-400 italic">Commit metadata not synced yet</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

@@ -61,6 +61,23 @@ export async function POST(
     }
 
     const node = await prisma.$transaction(async (tx) => {
+      // Find the repository linked to the project
+      const githubRepository = await tx.gitHubRepository.findUnique({
+        where: { projectId },
+      });
+
+      let commitsToConnect: { id: string }[] = [];
+      if (githubRepository && relatedCommits && Array.isArray(relatedCommits) && relatedCommits.length > 0) {
+        const dbCommits = await tx.gitHubCommit.findMany({
+          where: {
+            repoId: githubRepository.id,
+            sha: { in: relatedCommits },
+          },
+          select: { id: true },
+        });
+        commitsToConnect = dbCommits.map((c) => ({ id: c.id }));
+      }
+
       // 1. Create the node with serialized list data
       const nd = await tx.node.create({
         data: {
@@ -74,6 +91,9 @@ export async function POST(
           relatedCommits: JSON.stringify(relatedCommits || []),
           completedWork: JSON.stringify(completedWork || []),
           pendingWork: JSON.stringify(pendingWork || []),
+          githubCommits: {
+            connect: commitsToConnect,
+          },
         },
       });
 
@@ -119,6 +139,7 @@ export async function POST(
             avatarUrl: true,
           },
         },
+        githubCommits: true,
       },
     });
 
