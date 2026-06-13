@@ -32,7 +32,8 @@ export async function GET(request: Request) {
     }
 
     // Exchange code for access token
-    const accessToken = await exchangeCodeForToken(code);
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/github/callback`;
+    const accessToken = await exchangeCodeForToken(code, redirectUri);
 
     // Fetch GitHub user profile
     const githubUser = await fetchGitHubUser(accessToken);

@@ -174,18 +174,24 @@ export async function fetchBranchCommits(
 
 // ─── OAuth Token Exchange ────────────────────────────────────────────────────
 
-export async function exchangeCodeForToken(code: string): Promise<string> {
+export async function exchangeCodeForToken(code: string, redirectUri?: string): Promise<string> {
+  const body: Record<string, string> = {
+    client_id: process.env.GITHUB_CLIENT_ID || '',
+    client_secret: process.env.GITHUB_CLIENT_SECRET || '',
+    code,
+  };
+
+  if (redirectUri) {
+    body.redirect_uri = redirectUri;
+  }
+
   const res = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      client_id: process.env.GITHUB_CLIENT_ID,
-      client_secret: process.env.GITHUB_CLIENT_SECRET,
-      code,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
