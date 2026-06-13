@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Axon - Collaborative Development Progress Tracker",
+  title: "Axcen - Collaborative Development Progress Tracker",
   description: "Understand project progress, branches, milestones, and context in a unified visual feed without manual Git hunting.",
 };
 

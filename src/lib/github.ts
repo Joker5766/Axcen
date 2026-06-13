@@ -18,7 +18,7 @@ async function githubFetch<T>(options: GitHubApiOptions): Promise<T> {
     headers: {
       Authorization: `Bearer ${options.accessToken}`,
       Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'Axon-App',
+      'User-Agent': 'Axcen-App',
     },
   });
 

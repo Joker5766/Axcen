@@ -123,7 +123,7 @@ export default function DashboardPage() {
       fetchData();
       
       // Load recently viewed projects from local storage
-      const cached = localStorage.getItem('axon_recent_projects');
+      const cached = localStorage.getItem('axcen_recent_projects');
       if (cached) {
         try {
           setRecentlyViewed(JSON.parse(cached));
@@ -199,7 +199,7 @@ export default function DashboardPage() {
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-800"></div>
-          <p className="text-sm text-slate-500 font-medium">Loading Axon...</p>
+          <p className="text-sm text-slate-500 font-medium">Loading Axcen...</p>
         </div>
       </div>
     );
@@ -214,7 +214,7 @@ export default function DashboardPage() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white">
               <GitBranch className="h-5 w-5" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-slate-900">Axon</span>
+            <span className="font-bold text-lg tracking-tight text-slate-900">Axcen</span>
           </div>
 
           <div className="flex items-center gap-4">

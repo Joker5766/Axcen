@@ -60,7 +60,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         router.push('/');
         return {};
       } else {
-        return { error: data.error || 'Failed to login' };
+        const errorMsg = data.details ? `${data.error} (${data.details})` : (data.error || 'Failed to login');
+        return { error: errorMsg };
       }
     } catch (err) {
       return { error: 'An unexpected error occurred' };
@@ -80,7 +81,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         router.push('/');
         return {};
       } else {
-        return { error: data.error || 'Failed to register' };
+        const errorMsg = data.details ? `${data.error} (${data.details})` : (data.error || 'Failed to register');
+        return { error: errorMsg };
       }
     } catch (err) {
       return { error: 'An unexpected error occurred' };

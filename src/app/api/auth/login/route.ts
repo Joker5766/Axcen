@@ -43,10 +43,13 @@ export async function POST(request: Request) {
         avatarUrl: user.avatarUrl,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { error: 'Something went wrong. Please try again.' },
+      { 
+        error: 'Something went wrong. Please try again.',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

@@ -44,7 +44,7 @@ export default function LoginPage() {
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-800"></div>
-          <p className="text-sm text-slate-500 font-medium">Loading Axon...</p>
+          <p className="text-sm text-slate-500 font-medium">Loading Axcen...</p>
         </div>
       </div>
     );

@@ -179,7 +179,7 @@ export default function ProjectWorkspacePage({
         }
 
         // Cache recently viewed workspaces in local storage
-        const cacheRaw = localStorage.getItem('axon_recent_projects');
+        const cacheRaw = localStorage.getItem('axcen_recent_projects');
         let currentCache: { id: string; name: string }[] = [];
         if (cacheRaw) {
           try {
@@ -189,7 +189,7 @@ export default function ProjectWorkspacePage({
         // Filter out current project, prepend, limit to 5
         currentCache = currentCache.filter((item) => item.id !== pId);
         currentCache.unshift({ id: pId, name: data.project.name });
-        localStorage.setItem('axon_recent_projects', JSON.stringify(currentCache.slice(0, 5)));
+        localStorage.setItem('axcen_recent_projects', JSON.stringify(currentCache.slice(0, 5)));
 
       } else {
         const errData = await res.json();
