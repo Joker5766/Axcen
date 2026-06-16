@@ -48,6 +48,8 @@ import BranchDetailGraph from '@/components/BranchDetailGraph';
 import NodeDetailsPanel from '@/components/NodeDetailsPanel';
 import UserSettingsModal from '@/components/UserSettingsModal';
 import ProjectSettingsModal from '@/components/ProjectSettingsModal';
+import AxcenLoader from '@/components/AxcenLoader';
+import { useNotification } from '@/contexts/NotificationContext';
 
 export default function ProjectWorkspacePage({
   params,
@@ -55,6 +57,7 @@ export default function ProjectWorkspacePage({
   params: Promise<{ id: string }>;
 }) {
   const { user, loading } = useAuth();
+  const { showConfirm, showToast } = useNotification();
   const router = useRouter();
   
   // Unwrap params
@@ -225,10 +228,10 @@ export default function ProjectWorkspacePage({
         await fetchWorkspace(projectId);
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to analyze repository.');
+        showToast(data.error || 'Failed to analyze repository.', 'error');
       }
     } catch (err) {
-      alert('Connection error.');
+      showToast('Connection error.', 'error');
     } finally {
       setAnalyzing(false);
     }
@@ -332,7 +335,8 @@ export default function ProjectWorkspacePage({
   };
 
   const handleDeleteBranch = async (branchId: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete branch '${name}'? This will permanently delete all development nodes mapped to it.`)) return;
+    const isConfirmed = await showConfirm(`Are you sure you want to delete branch '${name}'? This will permanently delete all development nodes mapped to it.`, { title: 'Delete Branch', destructive: true });
+    if (!isConfirmed) return;
     try {
       const res = await fetch(`/api/projects/${projectId}/branches/${branchId}`, {
         method: 'DELETE',
@@ -343,12 +347,13 @@ export default function ProjectWorkspacePage({
         }
         setSelectedNode(null);
         await fetchWorkspace(projectId || '');
+        showToast('Branch deleted successfully.', 'success');
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to delete branch.');
+        showToast(data.error || 'Failed to delete branch.', 'error');
       }
     } catch (err) {
-      alert('Connection error.');
+      showToast('Connection error.', 'error');
     }
   };
 
@@ -759,10 +764,7 @@ export default function ProjectWorkspacePage({
   if (loading || !user || pageLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-800"></div>
-          <p className="text-sm text-slate-500 font-medium">Loading Workspace...</p>
-        </div>
+        <AxcenLoader text="Loading Workspace..." />
       </div>
     );
   }

@@ -108,6 +108,7 @@ export async function GET(request: Request) {
         githubUsername: dbUser.githubAccount?.githubUsername || null,
         profileCode: dbUser.profileCode || null,
         bannerGradient: dbUser.bannerGradient || null,
+        isProfilePrivate: dbUser.isProfilePrivate,
       },
       stats: {
         totalProjects: projects.length,
@@ -150,7 +151,7 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json();
-    const { avatarUrl, bannerGradient } = body;
+    const { avatarUrl, bannerGradient, isProfilePrivate } = body;
 
     const updateData: any = {};
 
@@ -160,6 +161,10 @@ export async function PATCH(request: Request) {
 
     if (typeof bannerGradient === 'string') {
       updateData.bannerGradient = bannerGradient;
+    }
+
+    if (typeof isProfilePrivate === 'boolean') {
+      updateData.isProfilePrivate = isProfilePrivate;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -180,6 +185,7 @@ export async function PATCH(request: Request) {
         createdAt: updatedUser.createdAt,
         profileCode: updatedUser.profileCode,
         bannerGradient: updatedUser.bannerGradient,
+        isProfilePrivate: updatedUser.isProfilePrivate,
       }
     });
   } catch (error) {

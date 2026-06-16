@@ -70,6 +70,7 @@ export async function POST(
           projectId,
           userId: invitee.id,
           role: 'MEMBER',
+          status: 'PENDING',
         },
         include: {
           user: {

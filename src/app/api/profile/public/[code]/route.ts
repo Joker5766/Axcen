@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(
   request: Request,
@@ -16,6 +17,24 @@ export async function GET(
 
     if (!dbUser) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    // Check privacy settings
+    if (dbUser.isProfilePrivate) {
+      const currentUser = await getCurrentUser().catch(() => null);
+      if (!currentUser || currentUser.id !== dbUser.id) {
+        return NextResponse.json({
+          user: {
+            name: dbUser.name,
+            avatarUrl: dbUser.avatarUrl,
+            createdAt: dbUser.createdAt,
+            profileCode: dbUser.profileCode,
+            bannerGradient: dbUser.bannerGradient || null,
+            isProfilePrivate: true,
+          },
+          isPrivate: true,
+        });
+      }
     }
 
     // Fetch public project memberships for this user
@@ -80,6 +99,7 @@ export async function GET(
         githubUsername: dbUser.githubAccount?.githubUsername || null,
         profileCode: dbUser.profileCode,
         bannerGradient: dbUser.bannerGradient || null,
+        isProfilePrivate: dbUser.isProfilePrivate,
       },
       stats: {
         totalProjects: projects.length,
@@ -104,6 +124,7 @@ export async function GET(
         url: r.repoUrl,
         defaultBranch: r.defaultBranch,
       })),
+      isPrivate: false,
     });
   } catch (error) {
     console.error('Fetch public profile API error:', error);

@@ -9,12 +9,13 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Find all projects where user is a member
+    // Find all projects where user is a member (status: ACCEPTED)
     const projects = await prisma.project.findMany({
       where: {
         members: {
           some: {
             userId: user.id,
+            status: 'ACCEPTED',
           },
         },
       },
@@ -43,7 +44,25 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ projects });
+    // Find all pending invitations for user
+    const invitations = await prisma.projectMember.findMany({
+      where: {
+        userId: user.id,
+        status: 'PENDING',
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ projects, invitations });
   } catch (error) {
     console.error('GET projects error:', error);
     return NextResponse.json(

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Link2, Unlink, RefreshCw, ExternalLink, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { GitHubRepository, GitHubRepo } from '@/types';
+import { useNotification } from '@/contexts/NotificationContext';
 
 const Github = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -33,6 +34,7 @@ export default function ProjectSettingsModal({
   onClose,
   onRepositoryUpdated,
 }: ProjectSettingsModalProps) {
+  const { showConfirm, showToast } = useNotification();
   const [gitHubConnected, setGitHubConnected] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   
@@ -54,7 +56,8 @@ export default function ProjectSettingsModal({
   const [success, setSuccess] = useState<string | null>(null);
 
   const handleDeleteProject = async () => {
-    if (!confirm('Are you sure you want to delete this project workspace? This action is permanent and will delete all nodes, branches, and timeline mappings. This cannot be undone.')) return;
+    const isConfirmed = await showConfirm('Are you sure you want to delete this project workspace? This action is permanent and will delete all nodes, branches, and timeline mappings. This cannot be undone.', { title: 'Delete Project', destructive: true });
+    if (!isConfirmed) return;
     setDeletingProject(true);
     setError(null);
     setSuccess(null);
@@ -63,7 +66,7 @@ export default function ProjectSettingsModal({
         method: 'DELETE',
       });
       if (res.ok) {
-        alert('Project workspace deleted successfully.');
+        showToast('Project workspace deleted successfully.', 'success');
         window.location.href = '/';
       } else {
         const data = await res.json();
@@ -170,7 +173,8 @@ export default function ProjectSettingsModal({
   };
 
   const handleUnlinkRepository = async () => {
-    if (!confirm('Are you sure you want to unlink this GitHub repository? Synced branch and commit records will remain in the database, but synchronization will be stopped.')) return;
+    const isConfirmed = await showConfirm('Are you sure you want to unlink this GitHub repository? Synced branch and commit records will remain in the database, but synchronization will be stopped.', { title: 'Unlink Repository' });
+    if (!isConfirmed) return;
     setUnlinking(true);
     setError(null);
     setSuccess(null);

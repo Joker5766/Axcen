@@ -11,9 +11,11 @@ import {
   Users, 
   ExternalLink, 
   Calendar,
-  CircleDot
+  CircleDot,
+  EyeOff
 } from 'lucide-react';
 import Link from 'next/link';
+import AxcenLoader from '@/components/AxcenLoader';
 
 const Github = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -57,6 +59,7 @@ interface ProfileData {
     githubUsername: string | null;
     profileCode: string | null;
     bannerGradient: string | null;
+    isProfilePrivate: boolean;
   };
   stats: {
     totalProjects: number;
@@ -67,6 +70,7 @@ interface ProfileData {
   skills: string[];
   projects: ProjectInfo[];
   repositories: RepositoryInfo[];
+  isPrivate?: boolean;
 }
 
 export default function PublicProfilePage({
@@ -112,10 +116,7 @@ export default function PublicProfilePage({
   if (loading || !profileCode || !profile) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-800"></div>
-          <p className="text-sm text-slate-500 font-medium animate-pulse">Loading Public Profile...</p>
-        </div>
+        <AxcenLoader text="Loading Developer Profile..." />
       </div>
     );
   }
@@ -136,6 +137,97 @@ export default function PublicProfilePage({
     );
   }
 
+  if (profile.isPrivate) {
+    const user = profile.user;
+    const currentBanner = user.bannerGradient || 'from-slate-900 via-slate-950 to-slate-900';
+    const isGradient = currentBanner.startsWith('from-') || currentBanner.startsWith('bg-');
+    const bannerStyle = isGradient ? {} : { backgroundImage: `url(${currentBanner})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+    const bannerClassName = isGradient ? `bg-gradient-to-br ${currentBanner}` : 'bg-slate-900';
+
+    return (
+      <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
+        {/* Top Navbar */}
+        <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-6 py-4">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link 
+                href="/"
+                className="group flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                title="Back to Dashboard"
+              >
+                <ArrowLeft className="h-4 w-4 text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
+              </Link>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-lg text-slate-900">Developer Profile</span>
+                <span className="text-[10px] font-bold tracking-wider uppercase bg-indigo-50 border border-indigo-150 text-indigo-600 px-2 py-0.5 rounded-full">
+                  Public View
+                </span>
+              </div>
+            </div>
+
+            <Link
+              href="/"
+              className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            >
+              Home Dashboard
+            </Link>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 max-w-lg w-full mx-auto px-6 py-16 flex flex-col justify-center">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header Banner */}
+            <div 
+              style={bannerStyle}
+              className={`h-24 relative overflow-hidden ${bannerClassName}`}
+            >
+              <div className="absolute top-0 right-0 h-20 w-20 bg-gradient-to-bl from-white/5 to-transparent blur-xl rounded-full pointer-events-none" />
+            </div>
+
+            {/* Content Body */}
+            <div className="px-8 pb-8 pt-0 relative flex flex-col items-center text-center">
+              {/* Avatar offset */}
+              <div className="-mt-12 mb-4 relative z-10">
+                <img 
+                  src={user.avatarUrl || 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix'} 
+                  alt={user.name} 
+                  className="h-24 w-24 rounded-full border-4 border-white shadow-lg object-cover"
+                />
+              </div>
+
+              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">{user.name}</h2>
+              {user.profileCode && (
+                <p className="text-xs font-mono text-slate-400 font-bold bg-slate-50 border border-slate-100 px-2.5 py-0.5 rounded-md mt-1.5 animate-pulse">
+                  ID: {user.profileCode}
+                </p>
+              )}
+
+              {/* Padlock Visual Representation */}
+              <div className="my-8 flex items-center justify-center h-16 w-16 rounded-full bg-red-50 border border-red-150 text-red-500 shadow-inner">
+                <EyeOff className="h-6 w-6 animate-pulse" />
+              </div>
+
+              <h3 className="text-base font-extrabold text-slate-800 tracking-tight">This profile is private</h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed max-w-sm">
+                The owner of this developer account has set their profile visibility to private. You cannot view their workspace activities, repositories, or skills.
+              </p>
+
+              <div className="mt-8 w-full border-t border-slate-100 pt-6">
+                <Link 
+                  href="/"
+                  className="inline-flex items-center justify-center w-full px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer hover:shadow-lg active:scale-98"
+                >
+                  Return to Dashboard
+                </Link>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const user = profile.user;
   const stats = profile.stats;
   const skills = profile.skills;
@@ -147,6 +239,9 @@ export default function PublicProfilePage({
     : 'N/A';
 
   const currentBanner = user.bannerGradient || 'from-slate-900 via-slate-950 to-slate-900';
+  const isGradient = currentBanner.startsWith('from-') || currentBanner.startsWith('bg-');
+  const bannerStyle = isGradient ? {} : { backgroundImage: `url(${currentBanner})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  const bannerClassName = isGradient ? `bg-gradient-to-br ${currentBanner}` : 'bg-slate-900';
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
@@ -182,9 +277,12 @@ export default function PublicProfilePage({
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8 space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-200">
         
         {/* Profile Card Header */}
-        <section className={`relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br ${currentBanner} p-8 text-white shadow-lg`}>
-          <div className="absolute top-0 right-0 h-40 w-40 bg-gradient-to-bl from-white/5 to-transparent blur-2xl rounded-full" />
-          <div className="absolute -bottom-10 -left-10 h-40 w-40 bg-gradient-to-tr from-white/5 to-transparent blur-2xl rounded-full" />
+        <section 
+          style={bannerStyle}
+          className={`relative overflow-hidden rounded-3xl border border-slate-200/80 p-8 text-white shadow-lg ${bannerClassName}`}
+        >
+          <div className="absolute top-0 right-0 h-40 w-40 bg-gradient-to-bl from-white/5 to-transparent blur-2xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 h-40 w-40 bg-gradient-to-tr from-white/5 to-transparent blur-2xl rounded-full pointer-events-none" />
           
           <div className="relative flex flex-col md:flex-row items-center md:items-start gap-6 text-center md:text-left">
             <img 

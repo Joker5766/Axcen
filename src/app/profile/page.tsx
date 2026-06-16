@@ -15,9 +15,13 @@ import {
   RefreshCw,
   CircleDot,
   Camera,
-  Palette
+  Palette,
+  EyeOff,
+  Eye
 } from 'lucide-react';
 import Link from 'next/link';
+import AxcenLoader from '@/components/AxcenLoader';
+import { useNotification } from '@/contexts/NotificationContext';
 
 const Github = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -63,6 +67,7 @@ interface ProfileData {
     githubUsername: string | null;
     profileCode: string | null;
     bannerGradient: string | null;
+    isProfilePrivate: boolean;
   };
   stats: {
     totalProjects: number;
@@ -95,6 +100,7 @@ const PRESET_GRADIENTS = [
 
 export default function ProfilePage() {
   const { user: authUser, loading: authLoading, refreshUser } = useAuth();
+  const { showConfirm, showToast } = useNotification();
   const router = useRouter();
   
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -197,6 +203,92 @@ export default function ProfilePage() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+
+    if (type === 'avatar') {
+      setPhotoError('');
+      setUpdatingPhoto(true);
+    } else {
+      setBannerError('');
+      setUpdatingBanner(true);
+    }
+
+    try {
+      const uploadRes = await fetch('/api/profile/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) {
+        throw new Error(uploadData.error || 'Upload failed.');
+      }
+
+      // Apply uploaded URL to profile settings
+      const patchRes = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          type === 'avatar' 
+            ? { avatarUrl: uploadData.url } 
+            : { bannerGradient: uploadData.url }
+        ),
+      });
+
+      if (!patchRes.ok) {
+        const patchData = await patchRes.json();
+        throw new Error(patchData.error || 'Failed to update profile.');
+      }
+
+      showToast(`${type === 'avatar' ? 'Profile photo' : 'Banner image'} uploaded successfully!`, 'success');
+      if (type === 'avatar') {
+        setShowPhotoModal(false);
+      } else {
+        setShowBannerModal(false);
+      }
+      await fetchProfile();
+      await refreshUser();
+    } catch (err: any) {
+      if (type === 'avatar') {
+        setPhotoError(err.message || 'Upload failed.');
+      } else {
+        setBannerError(err.message || 'Upload failed.');
+      }
+    } finally {
+      if (type === 'avatar') {
+        setUpdatingPhoto(false);
+      } else {
+        setUpdatingBanner(false);
+      }
+    }
+  };
+
+  const handleTogglePrivacy = async (privateVal: boolean) => {
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isProfilePrivate: privateVal }),
+      });
+      if (res.ok) {
+        showToast(`Profile is now ${privateVal ? 'Private' : 'Public'}.`, 'success');
+        await fetchProfile();
+        await refreshUser();
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Failed to toggle privacy.', 'error');
+      }
+    } catch (e) {
+      showToast('Connection error.', 'error');
+    }
+  };
+
   const handleSearchProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSearchError('');
@@ -218,10 +310,7 @@ export default function ProfilePage() {
   if (authLoading || (loading && !profile)) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-800"></div>
-          <p className="text-sm text-slate-500 font-medium animate-pulse">Loading Profile...</p>
-        </div>
+        <AxcenLoader text="Loading Profile..." />
       </div>
     );
   }
@@ -253,6 +342,9 @@ export default function ProfilePage() {
     : 'N/A';
 
   const currentBanner = user?.bannerGradient || 'from-slate-900 via-slate-950 to-slate-900';
+  const isGradient = currentBanner.startsWith('from-') || currentBanner.startsWith('bg-');
+  const bannerStyle = isGradient ? {} : { backgroundImage: `url(${currentBanner})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  const bannerClassName = isGradient ? `bg-gradient-to-br ${currentBanner}` : 'bg-slate-900';
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
@@ -287,18 +379,21 @@ export default function ProfilePage() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8 space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-200">
         
         {/* Profile Card Header */}
-        <section className={`relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br ${currentBanner} p-8 text-white shadow-lg`}>
-          <div className="absolute top-0 right-0 h-40 w-40 bg-gradient-to-bl from-white/5 to-transparent blur-2xl rounded-full" />
-          <div className="absolute -bottom-10 -left-10 h-40 w-40 bg-gradient-to-tr from-white/5 to-transparent blur-2xl rounded-full" />
+        <section 
+          style={bannerStyle}
+          className={`relative overflow-hidden rounded-3xl border border-slate-200/80 p-8 text-white shadow-lg ${bannerClassName}`}
+        >
+          <div className="absolute top-0 right-0 h-40 w-40 bg-gradient-to-bl from-white/5 to-transparent blur-2xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 h-40 w-40 bg-gradient-to-tr from-white/5 to-transparent blur-2xl rounded-full pointer-events-none" />
           
           {/* Customize Banner Button */}
           <button 
             onClick={() => setShowBannerModal(true)}
-            className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm transition-all cursor-pointer shadow-sm"
+            className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm transition-all cursor-pointer shadow-sm z-10"
             title="Customize Profile Banner"
           >
             <Palette className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Customize Banner</span>
+            <span>Customize Banner</span>
           </button>
 
           <div className="relative flex flex-col md:flex-row items-center md:items-start gap-6 text-center md:text-left">
@@ -333,23 +428,39 @@ export default function ProfilePage() {
                 <p className="text-slate-400 text-sm mt-1">{user?.email}</p>
               </div>
 
-              {/* Unique Profile ID */}
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-                <div className="inline-flex items-center gap-2.5 px-3 py-1 rounded-xl bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 shadow-inner">
+              {/* Unique Profile ID & Privacy Switch */}
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+                <div className="inline-flex items-center gap-2.5 px-3 py-1 rounded-xl bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 shadow-inner backdrop-blur-sm">
                   <span className="text-slate-400 font-medium">Profile ID:</span>
                   <span className="font-bold text-white font-mono">{user?.profileCode || 'axc-assigning'}</span>
                   <button 
                     onClick={() => {
                       if (user?.profileCode) {
                         navigator.clipboard.writeText(user.profileCode);
-                        alert('Shareable Profile ID copied to clipboard!');
+                        showToast('Shareable Profile ID copied to clipboard!', 'success');
                       }
                     }}
                     className="ml-1 hover:text-white text-slate-400 font-bold transition-colors cursor-pointer text-[10px] uppercase tracking-wider bg-white/5 hover:bg-white/15 px-2 py-0.5 rounded"
                   >
-                    Copy Link ID
+                    Copy
                   </button>
                 </div>
+
+                {/* Privacy checkbox switch */}
+                <label className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 cursor-pointer backdrop-blur-sm hover:bg-white/15 transition-all select-none">
+                  {user?.isProfilePrivate ? (
+                    <EyeOff className="h-3.5 w-3.5 text-red-400" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5 text-indigo-400" />
+                  )}
+                  <span className="font-medium">Private Profile</span>
+                  <input
+                    type="checkbox"
+                    checked={user?.isProfilePrivate || false}
+                    onChange={(e) => handleTogglePrivacy(e.target.checked)}
+                    className="ml-1.5 h-3.5 w-3.5 rounded text-slate-800 border-white/20 focus:ring-0 focus:ring-offset-0 bg-transparent cursor-pointer"
+                  />
+                </label>
               </div>
 
               <div className="flex flex-wrap justify-center md:justify-start gap-x-4 gap-y-2 text-xs text-slate-300 border-t border-white/5 pt-3">
@@ -431,17 +542,17 @@ export default function ProfilePage() {
               </p>
               
               <form onSubmit={handleSearchProfile} className="space-y-3">
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <input
                     type="text"
                     placeholder="e.g. axc-1234abcd"
                     value={searchCode}
                     onChange={(e) => setSearchCode(e.target.value)}
-                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none transition-colors"
+                    className="flex-1 h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none transition-colors"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                    className="h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0"
                   >
                     Search
                   </button>
@@ -586,6 +697,7 @@ export default function ProfilePage() {
             </div>
             
             <div className="space-y-4">
+              {/* Presets */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Preset Avatars</label>
                 <div className="grid grid-cols-6 gap-2">
@@ -603,9 +715,28 @@ export default function ProfilePage() {
                 </div>
               </div>
 
+              {/* Upload file from PC */}
               <div className="relative flex py-2 items-center">
                 <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">OR</span>
+                <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">OR UPLOAD FILE</span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Upload from PC</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileUpload(e, 'avatar')}
+                  disabled={updatingPhoto}
+                  className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer disabled:opacity-50"
+                />
+              </div>
+
+              {/* Paste URL */}
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">OR IMAGE URL</span>
                 <div className="flex-grow border-t border-slate-200"></div>
               </div>
 
@@ -622,7 +753,7 @@ export default function ProfilePage() {
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Custom Image URL</label>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Image URL</label>
                   <input
                     type="url"
                     required
@@ -682,18 +813,76 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                {PRESET_GRADIENTS.map((grad) => (
-                  <button
-                    key={grad.name}
-                    onClick={() => handleUpdateBanner(grad.value)}
-                    disabled={updatingBanner}
-                    className={`h-16 rounded-xl bg-gradient-to-br ${grad.value} border border-white/10 hover:border-slate-800 hover:scale-[1.02] transition-all p-3 text-left flex flex-col justify-end text-white cursor-pointer disabled:opacity-50 shadow-sm`}
-                  >
-                    <span className="text-[10px] font-extrabold tracking-tight">{grad.name}</span>
-                  </button>
-                ))}
+              {/* Gradients presets */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Preset Gradients</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {PRESET_GRADIENTS.map((grad) => (
+                    <button
+                      key={grad.name}
+                      onClick={() => handleUpdateBanner(grad.value)}
+                      disabled={updatingBanner}
+                      className={`h-16 rounded-xl bg-gradient-to-br ${grad.value} border border-white/10 hover:border-slate-800 hover:scale-[1.02] transition-all p-3 text-left flex flex-col justify-end text-white cursor-pointer disabled:opacity-50 shadow-sm`}
+                    >
+                      <span className="text-[10px] font-extrabold tracking-tight">{grad.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* File upload banner */}
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">OR UPLOAD BANNER</span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Upload Image File</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileUpload(e, 'banner')}
+                  disabled={updatingBanner}
+                  className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer disabled:opacity-50"
+                />
+              </div>
+
+              {/* Banner URL paste */}
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">OR BANNER URL</span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+
+              <form 
+                onSubmit={(e) => { 
+                  e.preventDefault(); 
+                  const target = e.currentTarget.elements.namedItem('bannerUrl') as HTMLInputElement;
+                  handleUpdateBanner(target.value); 
+                }} 
+                className="space-y-3"
+              >
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Banner Image URL</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      name="bannerUrl"
+                      required
+                      placeholder="https://example.com/banner.png"
+                      className="flex-1 rounded-lg border border-slate-200 py-1.5 px-3 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-800 focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="submit"
+                      disabled={updatingBanner}
+                      className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </form>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <button

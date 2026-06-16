@@ -16,6 +16,7 @@ import {
   GitMerge
 } from 'lucide-react';
 import { Node } from '@/types';
+import { useNotification } from '@/contexts/NotificationContext';
 
 interface NodeDetailsPanelProps {
   node: Node;
@@ -38,6 +39,7 @@ export default function NodeDetailsPanel({
   onEditClick,
   allNodes = [],
 }: NodeDetailsPanelProps) {
+  const { showConfirm, showToast } = useNotification();
   const [copiedCommit, setCopiedCommit] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -116,7 +118,8 @@ export default function NodeDetailsPanel({
   };
 
   const handleDeleteNode = async () => {
-    if (!confirm('Are you sure you want to delete this development node?')) return;
+    const isConfirmed = await showConfirm('Are you sure you want to delete this development node?', { title: 'Delete Node', destructive: true });
+    if (!isConfirmed) return;
     setUpdating(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/nodes/${node.id}`, {
@@ -156,11 +159,11 @@ export default function NodeDetailsPanel({
         window.location.reload();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to split cluster.');
+        showToast(err.error || 'Failed to split cluster.', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Error splitting commits.');
+      showToast('Error splitting commits.', 'error');
     } finally {
       setSplitting(false);
     }
@@ -186,11 +189,11 @@ export default function NodeDetailsPanel({
         window.location.reload();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to merge clusters.');
+        showToast(err.error || 'Failed to merge clusters.', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Error merging clusters.');
+      showToast('Error merging clusters.', 'error');
     } finally {
       setMerging(false);
     }

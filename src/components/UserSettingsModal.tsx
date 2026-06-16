@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Link2, Unlink, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useNotification } from '@/contexts/NotificationContext';
 
 const Github = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -24,6 +25,7 @@ interface UserSettingsModalProps {
 }
 
 export default function UserSettingsModal({ onClose }: UserSettingsModalProps) {
+  const { showConfirm, showToast } = useNotification();
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
@@ -61,7 +63,8 @@ export default function UserSettingsModal({ onClose }: UserSettingsModalProps) {
   };
 
   const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect your GitHub account? This will prevent you from syncing repository changes.')) return;
+    const isConfirmed = await showConfirm('Are you sure you want to disconnect your GitHub account? This will prevent you from syncing repository changes.', { title: 'Disconnect GitHub' });
+    if (!isConfirmed) return;
     setDisconnecting(true);
     setError(null);
     try {
