@@ -40,6 +40,7 @@ export interface Node {
   pendingWork: string[];
   createdAt: string;
   updatedAt: string;
+  isAiGenerated?: boolean;
   author: User;
   githubCommits?: GitHubCommit[];
 }

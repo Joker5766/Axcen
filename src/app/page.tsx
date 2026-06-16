@@ -80,6 +80,28 @@ export default function DashboardPage() {
   // User Settings Modal State
   const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
 
+  // Profile search states
+  const [profileSearchCode, setProfileSearchCode] = useState('');
+  const [profileSearchError, setProfileSearchError] = useState('');
+
+  const handleSearchProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSearchError('');
+    const code = profileSearchCode.trim();
+    if (!code) return;
+
+    try {
+      const res = await fetch(`/api/profile/public/${code}`);
+      if (res.ok) {
+        router.push(`/profile/${code}`);
+      } else {
+        setProfileSearchError('Profile code not found.');
+      }
+    } catch (err) {
+      setProfileSearchError('Connection error.');
+    }
+  };
+
   // Protect route
   useEffect(() => {
     if (!loading && !user) {
@@ -218,7 +240,10 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 border-r border-slate-200 pr-4">
+            <Link 
+              href="/profile" 
+              className="flex items-center gap-3 border-r border-slate-200 pr-4 hover:opacity-80 transition-opacity"
+            >
               <img 
                 src={user.avatarUrl} 
                 alt={user.name} 
@@ -228,7 +253,15 @@ export default function DashboardPage() {
                 <p className="text-sm font-semibold text-slate-800 leading-none">{user.name}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{user.email}</p>
               </div>
-            </div>
+            </Link>
+
+            <Link 
+              href="/profile"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-50 text-sm font-semibold transition-colors cursor-pointer"
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Profile</span>
+            </Link>
 
             <button 
               onClick={() => setShowUserSettingsModal(true)}
@@ -344,6 +377,37 @@ export default function DashboardPage() {
 
         {/* Sidebar Panel (1 Column wide on large screens) */}
         <aside className="lg:col-span-1 space-y-6">
+          
+          {/* Find Profile Widget */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+            <h2 className="text-sm font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+              <Users className="h-4 w-4 text-slate-400" />
+              Find Developer
+            </h2>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Enter a developer's unique Shareable ID to view their skillset and project statistics.
+            </p>
+            <form onSubmit={handleSearchProfile} className="space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. axc-1234abcd"
+                  value={profileSearchCode}
+                  onChange={(e) => setProfileSearchCode(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:outline-none transition-colors"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Search
+                </button>
+              </div>
+              {profileSearchError && (
+                <p className="text-[10px] text-red-500 font-semibold">{profileSearchError}</p>
+              )}
+            </form>
+          </div>
           
           {/* Recently Viewed */}
           {recentlyViewed.length > 0 && (

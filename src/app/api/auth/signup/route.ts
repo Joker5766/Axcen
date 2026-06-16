@@ -37,12 +37,28 @@ export async function POST(request: Request) {
     );
     const avatarUrl = `https://ui-avatars.com/api/?name=${initials}&background=0D8ABC&color=fff&size=128`;
 
+    let profileCode = '';
+    let codeExists = true;
+    let attempts = 0;
+    while (codeExists && attempts < 10) {
+      attempts++;
+      const randomStr = Math.random().toString(36).substring(2, 10);
+      profileCode = `axc-${randomStr}`;
+      const existingUserCode = await prisma.user.findUnique({
+        where: { profileCode },
+      });
+      if (!existingUserCode) {
+        codeExists = false;
+      }
+    }
+
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase().trim(),
         passwordHash,
         name: name.trim(),
         avatarUrl,
+        profileCode: codeExists ? null : profileCode,
       },
     });
 

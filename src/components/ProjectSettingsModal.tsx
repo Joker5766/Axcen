@@ -46,11 +46,36 @@ export default function ProjectSettingsModal({
   const [syncingBranches, setSyncingBranches] = useState(false);
   const [syncingCommits, setSyncingCommits] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
   
   // Feedback
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const handleDeleteProject = async () => {
+    if (!confirm('Are you sure you want to delete this project workspace? This action is permanent and will delete all nodes, branches, and timeline mappings. This cannot be undone.')) return;
+    setDeletingProject(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        alert('Project workspace deleted successfully.');
+        window.location.href = '/';
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to delete project.');
+      }
+    } catch (err) {
+      setError('Connection error.');
+    } finally {
+      setDeletingProject(false);
+    }
+  };
+ 
   // Check auth and fetch user repositories if not linked
   const checkAuthAndLoadRepos = async () => {
     setCheckingAuth(true);
@@ -87,6 +112,27 @@ export default function ProjectSettingsModal({
   useEffect(() => {
     checkAuthAndLoadRepos();
   }, [projectId, githubRepository]);
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/analyze`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setSuccess(`Repository analyzed successfully! Generated ${data.workItemsCount} work item nodes.`);
+        onRepositoryUpdated();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to analyze repository.');
+      }
+    } catch (err) {
+      setError('Connection error.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleLinkRepository = async () => {
     if (!selectedRepoId) return;
@@ -299,6 +345,16 @@ export default function ProjectSettingsModal({
                     <span className="text-slate-800 truncate block">ID: {projectId.slice(0, 8)}...</span>
                   </div>
                 </div>
+
+                <div className="border-t border-slate-200/60 pt-3.5 flex justify-end">
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={analyzing || syncingBranches || syncingCommits || unlinking}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10.5px] font-bold shadow transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {analyzing ? 'Analyzing...' : 'Analyze Repository'}
+                  </button>
+                </div>
               </div>
 
               {/* Sync controls */}
@@ -423,6 +479,25 @@ export default function ProjectSettingsModal({
               </div>
             </div>
           )}
+          {/* Danger Zone */}
+          <div className="border-t border-red-100 pt-5 mt-4 space-y-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-red-500">Danger Zone</h3>
+            <div className="p-4 rounded-xl border border-red-200 bg-red-50/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-red-950 font-bold block text-xs">Delete Project Workspace</span>
+                <p className="text-[10.5px] text-red-700/80 font-medium leading-normal max-w-sm">
+                  Permanently delete this project workspace, including all nodes, synced commits, branches, and timeline history. This action cannot be undone.
+                </p>
+              </div>
+              <button
+                onClick={handleDeleteProject}
+                disabled={deletingProject}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow text-xs transition-colors cursor-pointer disabled:opacity-50 shrink-0 self-start sm:self-center"
+              >
+                {deletingProject ? 'Deleting...' : 'Delete Project'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

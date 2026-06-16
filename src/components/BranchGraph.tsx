@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { GitBranch, Plus } from 'lucide-react';
+import { GitBranch, Plus, Trash2 } from 'lucide-react';
 
 interface Branch {
   id: string;
@@ -14,6 +14,8 @@ interface BranchGraphProps {
   activeBranchId: string | null;
   onSelectBranch: (branchId: string) => void;
   onCreateBranchClick: () => void;
+  isGithubLinked?: boolean;
+  onDeleteBranch?: (branchId: string, branchName: string) => void;
 }
 
 interface TreeItem extends Branch {
@@ -27,6 +29,8 @@ export default function BranchGraph({
   activeBranchId,
   onSelectBranch,
   onCreateBranchClick,
+  isGithubLinked = false,
+  onDeleteBranch,
 }: BranchGraphProps) {
   
   // 1. Build a helper tree from branches
@@ -131,13 +135,15 @@ export default function BranchGraph({
           <GitBranch className="h-4.5 w-4.5 text-slate-500" />
           <h2 className="text-sm font-bold text-slate-800 tracking-wide uppercase">Branch Graph</h2>
         </div>
-        <button
-          onClick={onCreateBranchClick}
-          className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Create Branch
-        </button>
+        {!isGithubLinked && (
+          <button
+            onClick={onCreateBranchClick}
+            className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create Branch
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto p-4 min-h-[180px] bg-slate-50/40 relative">
@@ -204,6 +210,22 @@ export default function BranchGraph({
               >
                 <GitBranch className={`h-4 w-4 ${node.active ? 'text-white' : 'text-slate-400'}`} />
                 <span className="truncate flex-1 text-left">{node.name}</span>
+                {node.name !== 'main' && onDeleteBranch && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteBranch(node.id, node.name);
+                    }}
+                    className={`p-1 rounded transition-colors ${
+                      node.active 
+                        ? 'hover:bg-slate-800 text-slate-400 hover:text-red-400' 
+                        : 'hover:bg-slate-100 text-slate-400 hover:text-red-600'
+                    }`}
+                    title={`Delete branch ${node.name}`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </span>
+                )}
               </button>
             ))}
           </div>

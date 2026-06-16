@@ -63,6 +63,7 @@ export async function GET(
           take: 50, // limit to last 50 activities for performance
         },
         githubRepository: true,
+        repositoryAnalysis: true,
       },
     });
 
@@ -111,10 +112,24 @@ export async function GET(
       },
     });
 
+    let parsedAnalysis = null;
+    if (project.repositoryAnalysis) {
+      parsedAnalysis = {
+        ...project.repositoryAnalysis,
+        techStack: JSON.parse(project.repositoryAnalysis.techStack || '[]'),
+        structure: JSON.parse(project.repositoryAnalysis.structure || '{}'),
+        contributors: JSON.parse(project.repositoryAnalysis.contributors || '[]'),
+        whatHasBeenBuilt: JSON.parse(project.repositoryAnalysis.whatHasBeenBuilt || '[]'),
+        currentlyActiveAreas: JSON.parse(project.repositoryAnalysis.currentlyActiveAreas || '[]'),
+        potentialNextSteps: JSON.parse(project.repositoryAnalysis.potentialNextSteps || '[]'),
+      };
+    }
+
     return NextResponse.json({
       project,
       nodes: parsedNodes,
       relationships,
+      analysis: parsedAnalysis,
     });
   } catch (error) {
     console.error('GET project detail error:', error);
@@ -124,3 +139,47 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: projectId } = await params;
+
+    // Verify user is project OWNER or has permission
+    const membership = await prisma.projectMember.findFirst({
+      where: {
+        projectId,
+        userId: user.id,
+        role: 'OWNER',
+      },
+    });
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: 'Forbidden. Only the project owner can delete this project.' },
+        { status: 403 }
+      );
+    }
+
+    // Delete the project and all cascade relations (handled by DB Cascade rule)
+    await prisma.project.delete({
+      where: { id: projectId },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Delete project error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete project.' },
+      { status: 500 }
+    );
+  }
+}
+

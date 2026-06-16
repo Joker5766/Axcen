@@ -80,6 +80,7 @@ export async function PUT(
           relatedCommits: relatedCommits !== undefined ? JSON.stringify(relatedCommits) : undefined,
           completedWork: completedWork !== undefined ? JSON.stringify(completedWork) : undefined,
           pendingWork: pendingWork !== undefined ? JSON.stringify(pendingWork) : undefined,
+          isAiGenerated: false,
           githubCommits: commitsToSet !== undefined ? {
             set: commitsToSet,
           } : undefined,

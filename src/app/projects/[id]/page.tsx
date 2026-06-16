@@ -13,7 +13,13 @@ import {
   Plus, 
   AlertCircle,
   Settings,
-  Check
+  Check,
+  Sparkles,
+  Code2,
+  FolderOpen,
+  ListChecks,
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -65,6 +71,10 @@ export default function ProjectWorkspacePage({
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   
+  const [activeTab, setActiveTab] = useState<'canvas' | 'analysis'>('canvas');
+  const [analysis, setAnalysis] = useState<any | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState('');
 
@@ -171,6 +181,7 @@ export default function ProjectWorkspacePage({
         setNodes(data.nodes || []);
         setRelationships(data.relationships || []);
         setActivities(data.project.activities || []);
+        setAnalysis(data.analysis || null);
 
         // Save active branch selection (default to main, then first branch, or null)
         if (!activeBranchId && data.project.branches && data.project.branches.length > 0) {
@@ -199,6 +210,27 @@ export default function ProjectWorkspacePage({
       setPageError('Connection error, please reload page.');
     } finally {
       setPageLoading(false);
+    }
+  };
+
+  const handleAnalyzeRepository = async () => {
+    if (!projectId) return;
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/analyze`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setAnalysis(data.analysis);
+        // Refresh project workspace info (reloads nodes, relationships, activities)
+        await fetchWorkspace(projectId);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to analyze repository.');
+      }
+    } catch (err) {
+      alert('Connection error.');
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -296,6 +328,27 @@ export default function ProjectWorkspacePage({
       setBranchError('Connection error.');
     } finally {
       setBranchSubmitting(false);
+    }
+  };
+
+  const handleDeleteBranch = async (branchId: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete branch '${name}'? This will permanently delete all development nodes mapped to it.`)) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/branches/${branchId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        if (activeBranchId === branchId) {
+          setActiveBranchId(null);
+        }
+        setSelectedNode(null);
+        await fetchWorkspace(projectId || '');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete branch.');
+      }
+    } catch (err) {
+      alert('Connection error.');
     }
   };
 
@@ -452,6 +505,257 @@ export default function ProjectWorkspacePage({
   const activeBranchNodes = nodes.filter((n) => n.branchId === activeBranchId);
   const activeBranch = branches.find((b) => b.id === activeBranchId);
 
+  const RepositoryAnalysisView = () => {
+    if (!analysis) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-white p-12 text-center max-w-2xl mx-auto my-12 shadow-sm">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-50 text-slate-400">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-bold text-slate-900">No Repository Analysis Found</h3>
+          <p className="mt-2 text-xs text-slate-500 max-w-sm font-medium leading-relaxed">
+            Generate factual statistics, technology stack mapping, and automatic commit clusters on your branches.
+          </p>
+          <button
+            onClick={handleAnalyzeRepository}
+            disabled={analyzing}
+            className="mt-6 flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${analyzing ? 'animate-spin' : ''}`} />
+            {analyzing ? 'Analyzing Repository...' : 'Analyze Repository'}
+          </button>
+        </div>
+      );
+    }
+
+    // Parse list/json values if stringified (which we expect from DB)
+    const techStackList = Array.isArray(analysis.techStack) 
+      ? analysis.techStack 
+      : JSON.parse(analysis.techStack || '[]');
+
+    const contributorsList = Array.isArray(analysis.contributors)
+      ? analysis.contributors
+      : JSON.parse(analysis.contributors || '[]');
+
+    // Format dates helper
+    const formatDate = (dateVal: string | null) => {
+      if (!dateVal) return 'N/A';
+      return new Date(dateVal).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    };
+
+    // Group AI-generated nodes (commit clusters) by branch
+    const clustersByBranch: Record<string, { branchName: string; nodesList: Node[] }> = {};
+    
+    // Create branch mapping
+    const branchMap = new Map<string, string>();
+    branches.forEach(b => branchMap.set(b.id, b.name));
+
+    nodes.filter(n => n.isAiGenerated).forEach(node => {
+      const branchName = branchMap.get(node.branchId) || 'main';
+      if (!clustersByBranch[node.branchId]) {
+        clustersByBranch[node.branchId] = {
+          branchName,
+          nodesList: [],
+        };
+      }
+      clustersByBranch[node.branchId].nodesList.push(node);
+    });
+
+    return (
+      <div className="flex-1 overflow-y-auto space-y-6 pr-1">
+        {/* Header Section */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900">Repository Insights</h2>
+            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+              Factual repository structure generated on {new Date(analysis.updatedAt).toLocaleDateString()}
+            </p>
+          </div>
+          <button
+            onClick={handleAnalyzeRepository}
+            disabled={analyzing}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${analyzing ? 'animate-spin' : ''}`} />
+            {analyzing ? 'Analyzing...' : 'Re-analyze'}
+          </button>
+        </div>
+
+        {/* Top Section: Summary & Tech Stack */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Factual Summary Card */}
+          {analysis.summary ? (
+            <div className="lg:col-span-2 p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-slate-500" />
+                Project Summary
+              </h3>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                {analysis.summary}
+              </p>
+            </div>
+          ) : null}
+
+          {/* Tech Stack Card */}
+          <div className={`${analysis.summary ? 'lg:col-span-1' : 'lg:col-span-3'} p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-3`}>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Code2 className="h-4 w-4 text-slate-500" />
+              Technology Stack
+            </h3>
+            {techStackList.length > 0 ? (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {techStackList.map((tech: string) => (
+                  <span 
+                    key={tech} 
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-slate-50 text-slate-700 border border-slate-200/60"
+                  >
+                    {tech}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">No technologies detected in root project files.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Stats Section: 6 Factual Fields */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Branches</span>
+            <span className="text-lg font-black text-slate-900 block mt-1">{analysis.totalBranches}</span>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Commits</span>
+            <span className="text-lg font-black text-slate-900 block mt-1">{analysis.totalCommits}</span>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contributors</span>
+            <span className="text-lg font-black text-slate-900 block mt-1 truncate" title={contributorsList.join(', ')}>
+              {contributorsList.length}
+            </span>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Default Branch</span>
+            <span className="text-sm font-bold text-slate-800 block mt-2 truncate font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 w-fit">
+              {analysis.defaultBranch || 'main'}
+            </span>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">First Commit</span>
+            <span className="text-xs font-bold text-slate-700 block mt-2 truncate">
+              {formatDate(analysis.firstCommitDate)}
+            </span>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Last Commit</span>
+            <span className="text-xs font-bold text-slate-700 block mt-2 truncate">
+              {formatDate(analysis.lastCommitDate)}
+            </span>
+          </div>
+        </div>
+
+        {/* Grouped Commit Clusters */}
+        <div className="space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <GitBranch className="h-4 w-4 text-slate-500" />
+            Branch Commit Clusters
+          </h3>
+
+          {Object.keys(clustersByBranch).length === 0 ? (
+            <div className="p-8 border border-dashed border-slate-200 rounded-2xl bg-white text-center text-xs text-slate-400 font-semibold">
+              No commit clusters generated. Ensure commits have been synced.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(clustersByBranch).map(([branchId, group]) => (
+                <div key={branchId} className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                    <GitBranch className="h-4 w-4 text-slate-600" />
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-slate-800">{group.branchName}</h4>
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-50 border border-slate-200 text-slate-500">
+                      {group.nodesList.length} {group.nodesList.length === 1 ? 'cluster' : 'clusters'}
+                    </span>
+                  </div>
+
+                  <div className="relative pl-6 border-l border-slate-200 space-y-6 ml-2 py-1">
+                    {group.nodesList.map((item) => {
+                      const commitsCount = item.relatedCommits ? item.relatedCommits.length : 0;
+                      return (
+                        <div key={item.id} className="relative group">
+                          {/* Timeline dot */}
+                          <span className={`absolute -left-[31px] top-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 bg-white transition-transform group-hover:scale-110 ${
+                            item.status === 'COMPLETED'
+                              ? 'border-green-500 text-green-500'
+                              : 'border-blue-500 text-blue-500'
+                          }`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${item.status === 'COMPLETED' ? 'bg-green-500' : 'bg-blue-500'}`}></span>
+                          </span>
+
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <h5 className="text-xs font-extrabold text-slate-900">{item.title}</h5>
+                              <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded border ${
+                                item.status === 'COMPLETED'
+                                  ? 'bg-green-50 border-green-200 text-green-700'
+                                  : 'bg-blue-50 border-blue-200 text-blue-700'
+                              }`}>
+                                {item.status === 'COMPLETED' ? 'Completed' : 'In Progress'}
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                              {item.summary}
+                            </p>
+
+                            {/* Commits list under cluster */}
+                            <div className="space-y-1.5 max-w-xl bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
+                              <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wide block">Commits ({commitsCount}):</span>
+                              <ul className="space-y-1">
+                                {item.completedWork.map((msg: string, idx: number) => {
+                                  const sha = item.relatedCommits?.[idx] || '';
+                                  return (
+                                    <li key={idx} className="text-[10px] font-semibold text-slate-600 flex items-start gap-1.5 leading-normal">
+                                      <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-100 text-slate-500 text-[8.5px] mt-0.5">
+                                        {sha.slice(0, 7) || 'commit'}
+                                      </span>
+                                      <span className="truncate">{msg}</span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 pt-1">
+                              <button
+                                onClick={() => {
+                                  setSelectedNode(item);
+                                  setActiveBranchId(item.branchId);
+                                  setActiveTab('canvas');
+                                }}
+                                className="text-slate-600 hover:text-slate-950 underline underline-offset-2 cursor-pointer"
+                              >
+                                Inspect on Canvas
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (loading || !user || pageLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
@@ -588,6 +892,15 @@ export default function ProjectWorkspacePage({
             <span className="hidden sm:inline">Project Settings</span>
           </button>
 
+          <Link
+            href="/profile"
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            title="View User Profile"
+          >
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Profile</span>
+          </Link>
+
           <button
             onClick={() => setShowUserSettingsModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
@@ -613,6 +926,30 @@ export default function ProjectWorkspacePage({
         {/* Left Side: Members list and Activity Log */}
         <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-slate-200 bg-white p-6 flex flex-col gap-6 flex-shrink-0">
           
+          {/* GitHub Repository Status Card */}
+          {project?.githubRepository && (
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">GitHub Integration</span>
+                <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 truncate">
+                  {project.githubRepository.repoOwner}/{project.githubRepository.repoName}
+                </h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Default branch: {project.githubRepository.defaultBranch}</p>
+              </div>
+              <button
+                onClick={handleAnalyzeRepository}
+                disabled={analyzing}
+                className="flex items-center justify-center gap-1.5 w-full py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold shadow transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3 w-3 ${analyzing ? 'animate-spin' : ''}`} />
+                {analyzing ? 'Analyzing...' : 'Analyze Repository'}
+              </button>
+            </div>
+          )}
+
           {/* Members widget */}
           <div className="space-y-4">
             <h2 className="text-xs font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
@@ -681,26 +1018,60 @@ export default function ProjectWorkspacePage({
         {/* Right / Center Canvas (Main Graph Workspace) */}
         <main className="flex-1 flex flex-col p-6 gap-6 bg-slate-50 overflow-hidden">
           
-          {/* Top Half: Branch Graph */}
-          <BranchGraph 
-            branches={branches}
-            activeBranchId={activeBranchId}
-            onSelectBranch={(id) => {
-              setActiveBranchId(id);
-              setSelectedNode(null); // Clear selected node on branch switch
-            }}
-            onCreateBranchClick={() => setShowBranchModal(true)}
-          />
+          {/* Tab Selector */}
+          {project?.githubRepository && (
+            <div className="flex border-b border-slate-200 -mx-6 -mt-6 px-6 bg-white shrink-0">
+              <button
+                onClick={() => setActiveTab('canvas')}
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+                  activeTab === 'canvas'
+                    ? 'border-slate-900 text-slate-950'
+                    : 'border-transparent text-slate-400 hover:text-slate-700'
+                }`}
+              >
+                Workspace Canvas
+              </button>
+              <button
+                onClick={() => setActiveTab('analysis')}
+                className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+                  activeTab === 'analysis'
+                    ? 'border-slate-900 text-slate-950'
+                    : 'border-transparent text-slate-400 hover:text-slate-700'
+                }`}
+              >
+                Repository Analysis
+              </button>
+            </div>
+          )}
 
-          {/* Bottom Half: Branch Detail Graph */}
-          <BranchDetailGraph 
-            nodes={activeBranchNodes}
-            relationships={relationships}
-            activeNodeId={selectedNode?.id || null}
-            onSelectNode={(node) => setSelectedNode(node)}
-            onCreateNodeClick={openCreateNodeModal}
-            branchName={activeBranch ? activeBranch.name : 'Unknown'}
-          />
+          {activeTab === 'canvas' ? (
+            <>
+              {/* Top Half: Branch Graph */}
+              <BranchGraph 
+                branches={branches}
+                activeBranchId={activeBranchId}
+                onSelectBranch={(id) => {
+                  setActiveBranchId(id);
+                  setSelectedNode(null); // Clear selected node on branch switch
+                }}
+                onCreateBranchClick={() => setShowBranchModal(true)}
+                isGithubLinked={!!project?.githubRepository}
+                onDeleteBranch={handleDeleteBranch}
+              />
+
+              {/* Bottom Half: Branch Detail Graph */}
+              <BranchDetailGraph 
+                nodes={activeBranchNodes}
+                relationships={relationships}
+                activeNodeId={selectedNode?.id || null}
+                onSelectNode={(node) => setSelectedNode(node)}
+                onCreateNodeClick={openCreateNodeModal}
+                branchName={activeBranch ? activeBranch.name : 'Unknown'}
+              />
+            </>
+          ) : (
+            <RepositoryAnalysisView />
+          )}
 
         </main>
       </div>
@@ -715,6 +1086,7 @@ export default function ProjectWorkspacePage({
           onNodeUpdated={handleNodeUpdated}
           onNodeDeleted={handleNodeDeleted}
           onEditClick={() => openEditNodeModal(selectedNode)}
+          allNodes={nodes}
         />
       )}
 

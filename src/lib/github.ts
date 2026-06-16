@@ -206,3 +206,43 @@ export async function exchangeCodeForToken(code: string, redirectUri?: string): 
 
   return data.access_token;
 }
+
+// ─── Repository Contents & Files ─────────────────────────────────────────────
+
+export interface GitHubContentItem {
+  name: string;
+  path: string;
+  type: string; // 'file' or 'dir'
+}
+
+export async function fetchRepoRootContents(
+  accessToken: string,
+  owner: string,
+  repo: string
+): Promise<GitHubContentItem[]> {
+  return githubFetch<GitHubContentItem[]>({
+    accessToken,
+    endpoint: `/repos/${owner}/${repo}/contents`,
+  });
+}
+
+export async function fetchRepoFileContent(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  path: string
+): Promise<string | null> {
+  try {
+    const data = await githubFetch<{ content: string; encoding: string }>({
+      accessToken,
+      endpoint: `/repos/${owner}/${repo}/contents/${path}`,
+    });
+    if (data && data.encoding === 'base64') {
+      return Buffer.from(data.content, 'base64').toString('utf-8');
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+

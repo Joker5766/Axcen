@@ -12,7 +12,8 @@ import {
   Edit3, 
   Trash2,
   ListTodo,
-  ChevronDown
+  ChevronDown,
+  GitMerge
 } from 'lucide-react';
 import { Node } from '@/types';
 
@@ -24,6 +25,7 @@ interface NodeDetailsPanelProps {
   onNodeUpdated: (updatedNode: Node) => void;
   onNodeDeleted: (nodeId: string) => void;
   onEditClick: () => void;
+  allNodes?: Node[];
 }
 
 export default function NodeDetailsPanel({
@@ -34,10 +36,21 @@ export default function NodeDetailsPanel({
   onNodeUpdated,
   onNodeDeleted,
   onEditClick,
+  allNodes = [],
 }: NodeDetailsPanelProps) {
   const [copiedCommit, setCopiedCommit] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+
+  // Split states
+  const [selectedCommitsToSplit, setSelectedCommitsToSplit] = useState<string[]>([]);
+  const [newSplitTitle, setNewSplitTitle] = useState('');
+  const [splitting, setSplitting] = useState(false);
+
+  // Merge states
+  const [showMergeSection, setShowMergeSection] = useState(false);
+  const [selectedMergeTargetId, setSelectedMergeTargetId] = useState('');
+  const [merging, setMerging] = useState(false);
 
   const handleCopyCommit = (hash: string) => {
     navigator.clipboard.writeText(hash);
@@ -45,7 +58,6 @@ export default function NodeDetailsPanel({
     setTimeout(() => setCopiedCommit(null), 2000);
   };
 
-  // Toggle status directly from detail view
   const handleStatusChange = async (newStatus: Node['status']) => {
     setUpdating(true);
     setShowStatusDropdown(false);
@@ -66,19 +78,16 @@ export default function NodeDetailsPanel({
     }
   };
 
-  // Move task from pending to completed or vice versa
   const handleToggleTask = async (taskText: string, currentlyCompleted: boolean) => {
     let newCompleted = [...node.completedWork];
     let newPending = [...node.pendingWork];
 
     if (currentlyCompleted) {
-      // Move from completed to pending
       newCompleted = newCompleted.filter(t => t !== taskText);
       if (!newPending.includes(taskText)) {
         newPending.push(taskText);
       }
     } else {
-      // Move from pending to completed
       newPending = newPending.filter(t => t !== taskText);
       if (!newCompleted.includes(taskText)) {
         newCompleted.push(taskText);
@@ -124,6 +133,69 @@ export default function NodeDetailsPanel({
     }
   };
 
+  const handleSplitCommits = async () => {
+    if (selectedCommitsToSplit.length === 0 || !newSplitTitle.trim()) return;
+    setSplitting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/nodes/split`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodeId: node.id,
+          commitShas: selectedCommitsToSplit,
+          newTitle: newSplitTitle,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        onNodeUpdated(data.originalNode);
+        setSelectedCommitsToSplit([]);
+        setNewSplitTitle('');
+        onClose();
+        window.location.reload();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to split cluster.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error splitting commits.');
+    } finally {
+      setSplitting(false);
+    }
+  };
+
+  const handleMergeCluster = async () => {
+    if (!selectedMergeTargetId) return;
+    setMerging(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/nodes/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceNodeId: node.id,
+          targetNodeId: selectedMergeTargetId,
+        }),
+      });
+
+      if (res.ok) {
+        setShowMergeSection(false);
+        setSelectedMergeTargetId('');
+        onClose();
+        window.location.reload();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to merge clusters.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error merging clusters.');
+    } finally {
+      setMerging(false);
+    }
+  };
+
   const getStatusBadge = (status: Node['status']) => {
     switch (status) {
       case 'COMPLETED':
@@ -135,6 +207,8 @@ export default function NodeDetailsPanel({
         return 'bg-slate-100 text-slate-600 border-slate-200';
     }
   };
+
+  const mergeableNodes = allNodes.filter(n => n.id !== node.id && n.branchId === node.branchId);
 
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-full max-w-xl bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-200">
@@ -159,7 +233,6 @@ export default function NodeDetailsPanel({
         {/* Meta Grid */}
         <div className="grid grid-cols-2 gap-4 rounded-xl border border-slate-100 bg-slate-50/50 p-4 text-xs font-semibold text-slate-600">
           
-          {/* Status Dropdown selector */}
           <div className="space-y-1">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Status</span>
             <div className="relative">
@@ -224,53 +297,98 @@ export default function NodeDetailsPanel({
         {/* Associated Commits */}
         {node.relatedCommits.length > 0 && (
           <div className="space-y-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Related Commits</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-bold">Related Commits</span>
             <div className="space-y-2 border border-slate-100 rounded-xl bg-slate-50/20 p-3">
               {node.relatedCommits.map((hash) => {
                 const commitInfo = node.githubCommits?.find(
                   (c) => c.sha === hash || c.sha.startsWith(hash)
                 );
 
+                const isCheckedForSplit = selectedCommitsToSplit.includes(hash);
+
                 return (
-                  <div key={hash} className="flex flex-col gap-1.5 p-2.5 border border-slate-100 bg-white rounded-lg shadow-xs">
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={() => handleCopyCommit(hash)}
-                        className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-[9.5px] font-mono font-semibold text-slate-600 transition-all cursor-pointer"
-                        title="Click to copy commit hash"
-                      >
-                        {copiedCommit === hash ? (
-                          <Check className="h-3 w-3 text-green-600 animate-in zoom-in-50" />
-                        ) : (
-                          <Copy className="h-3 w-3 text-slate-400" />
+                  <div key={hash} className="flex gap-2.5 p-2.5 border border-slate-100 bg-white rounded-lg shadow-xs items-start">
+                    {node.relatedCommits.length > 1 && (
+                      <input
+                        type="checkbox"
+                        checked={isCheckedForSplit}
+                        onChange={() => {
+                          if (isCheckedForSplit) {
+                            setSelectedCommitsToSplit(selectedCommitsToSplit.filter((s) => s !== hash));
+                          } else {
+                            setSelectedCommitsToSplit([...selectedCommitsToSplit, hash]);
+                          }
+                        }}
+                        className="rounded border-slate-300 text-slate-950 focus:ring-slate-900 mt-1 cursor-pointer h-4 w-4"
+                        title="Select commit to split into a new cluster node"
+                      />
+                    )}
+
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyCommit(hash)}
+                          className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-[9.5px] font-mono font-semibold text-slate-600 transition-all cursor-pointer"
+                          title="Click to copy commit hash"
+                        >
+                          {copiedCommit === hash ? (
+                            <Check className="h-3 w-3 text-green-600 animate-in zoom-in-50" />
+                          ) : (
+                            <Copy className="h-3 w-3 text-slate-400" />
+                          )}
+                          <span>{hash.slice(0, 7)}</span>
+                        </button>
+                        
+                        {commitInfo && (
+                          <span className="text-[9.5px] text-slate-400 font-semibold">
+                            {new Date(commitInfo.timestamp).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
                         )}
-                        <span>{hash.slice(0, 7)}</span>
-                      </button>
-                      
-                      {commitInfo && (
-                        <span className="text-[9.5px] text-slate-400 font-semibold">
-                          {new Date(commitInfo.timestamp).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </span>
+                      </div>
+
+                      {commitInfo ? (
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-semibold text-slate-800 leading-normal">{commitInfo.message}</p>
+                          <p className="text-[9.5px] text-slate-400 font-semibold font-mono">by {commitInfo.author}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-semibold text-slate-400 italic">Commit metadata not synced yet</p>
+                        </div>
                       )}
                     </div>
-
-                    {commitInfo ? (
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-semibold text-slate-800 leading-normal">{commitInfo.message}</p>
-                        <p className="text-[9.5px] text-slate-400 font-semibold">by {commitInfo.author}</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-semibold text-slate-400 italic">Commit metadata not synced yet</p>
-                      </div>
-                    )}
                   </div>
                 );
               })}
+
+              {/* Split control box */}
+              {selectedCommitsToSplit.length > 0 && (
+                <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">Split Cluster ({selectedCommitsToSplit.length} selected)</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New cluster title..."
+                      value={newSplitTitle}
+                      onChange={(e) => setNewSplitTitle(e.target.value)}
+                      className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-900 bg-white focus:border-slate-800 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSplitCommits}
+                      disabled={splitting || !newSplitTitle.trim()}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {splitting ? 'Splitting...' : 'Split'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -294,7 +412,6 @@ export default function NodeDetailsPanel({
             <p className="text-xs text-slate-400 italic font-medium">No tasks listed for this node.</p>
           ) : (
             <div className="space-y-2 border border-slate-100 rounded-xl bg-white p-4 shadow-sm">
-              {/* Pending tasks */}
               {node.pendingWork.map((task) => (
                 <button
                   key={task}
@@ -307,7 +424,6 @@ export default function NodeDetailsPanel({
                 </button>
               ))}
 
-              {/* Completed tasks */}
               {node.completedWork.map((task) => (
                 <button
                   key={task}
@@ -346,24 +462,73 @@ export default function NodeDetailsPanel({
       </div>
 
       {/* Drawer Action Footer */}
-      <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
-        <button
-          onClick={handleDeleteNode}
-          disabled={updating}
-          className="flex items-center gap-1.5 px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <Trash2 className="h-4 w-4" />
-          Delete Node
-        </button>
+      <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex flex-col gap-3 shrink-0">
+        
+        {/* Merge section inline toggle */}
+        {showMergeSection && (
+          <div className="p-3 border border-slate-200 rounded-xl bg-white space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">Merge into another node</span>
+            <div className="flex gap-2">
+              <select
+                value={selectedMergeTargetId}
+                onChange={(e) => setSelectedMergeTargetId(e.target.value)}
+                className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 bg-white focus:border-slate-800 focus:outline-none"
+              >
+                <option value="">Choose cluster...</option>
+                {mergeableNodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.title} ({n.relatedCommits.length} commits)
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleMergeCluster}
+                disabled={merging || !selectedMergeTargetId}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {merging ? 'Merging...' : 'Merge'}
+              </button>
+            </div>
+          </div>
+        )}
 
-        <button
-          onClick={onEditClick}
-          disabled={updating}
-          className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <Edit3 className="h-4 w-4" />
-          Edit Node
-        </button>
+        <div className="flex items-center justify-between gap-3 w-full">
+          <button
+            type="button"
+            onClick={handleDeleteNode}
+            disabled={updating}
+            className="flex items-center gap-1.5 px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Node
+          </button>
+
+          <div className="flex items-center gap-2">
+            {mergeableNodes.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowMergeSection(!showMergeSection)}
+                disabled={updating}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <GitMerge className="h-4 w-4" />
+                Merge
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onEditClick}
+              disabled={updating}
+              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Edit3 className="h-4 w-4" />
+              Edit Node
+            </button>
+          </div>
+        </div>
+
       </div>
 
     </div>
